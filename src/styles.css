@@ -1,0 +1,335 @@
+:root {
+  color-scheme: light;
+  --bg: #f4efe6;
+  --ink: #1f1b16;
+  --muted: #5c564d;
+  --paper: #fffdf8;
+  --rule: #d7d0c4;
+  --accent: #8c3116;
+  --accent-ink: #fffdf8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+.site-header,
+.site-footer,
+main {
+  width: min(1120px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  padding: 1.25rem 0 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.wordmark {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1rem;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.95rem;
+}
+
+.hero,
+.feature,
+.panel,
+.city,
+.post,
+.prose {
+  padding: 1.5rem 0;
+}
+
+.kicker {
+  margin: 0 0 0.4rem;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1,
+h2 {
+  margin: 0 0 0.6rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.35rem;
+}
+
+.lede {
+  max-width: 42rem;
+  font-size: 1.15rem;
+}
+
+.feature,
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 1.25rem;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.search input {
+  width: min(18rem, 100%);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.metric {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0.85rem;
+}
+
+.metric-label,
+.metric-note {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.metric-value {
+  margin: 0.25rem 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.facts {
+  margin: 0;
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--rule);
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.95rem;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.post-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.split p + h2,
+.split .post-list + h2 {
+  margin-top: 1.5rem;
+}
+
+.post .panel + .panel {
+  margin-top: 1rem;
+}
+
+.post-list li + li {
+  margin-top: 0.6rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.92rem;
+}
+
+table.data th,
+table.data td {
+  padding: 0.45rem 0.4rem;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  white-space: nowrap;
+}
+
+table.data th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+table.data th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+table.data th[data-tip]:hover,
+table.data th[data-tip]:focus-visible {
+  z-index: 3;
+}
+
+table.data th[data-tip]:hover::before,
+table.data th[data-tip]:focus-visible::before {
+  content: attr(data-tip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 4;
+  width: max-content;
+  max-width: 16.5rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--ink);
+  color: var(--accent-ink);
+  font-weight: 400;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+}
+
+table.data th[data-tip]:last-child:hover::before,
+table.data th[data-tip]:last-child:focus-visible::before {
+  left: auto;
+  right: 0;
+}
+
+table.data th[data-sort]::after {
+  content: '';
+  display: inline-block;
+  width: 0.55em;
+  height: 0.85em;
+  margin-left: 0.4em;
+  vertical-align: -0.12em;
+  opacity: 0.55;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 1L9 6.5H1z'/%3E%3Cpath d='M5 15L1 9.5H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 1L9 6.5H1z'/%3E%3Cpath d='M5 15L1 9.5H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+table.data th[aria-sort='ascending']::after {
+  opacity: 1;
+  background-color: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 1L9 6.5H1z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 1L9 6.5H1z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+table.data th[aria-sort='descending']::after {
+  opacity: 1;
+  background-color: var(--accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 15L1 9.5H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpath d='M5 15L1 9.5H9z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+table.data tr.is-current {
+  background: #efe6d6;
+}
+
+.tag {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.note {
+  color: var(--muted);
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.9rem;
+}
+
+.prose ul {
+  padding-left: 1.2rem;
+}
+
+.site-footer {
+  padding: 2rem 0 3rem;
+  color: var(--muted);
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    flex-direction: column;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+  }
+}
