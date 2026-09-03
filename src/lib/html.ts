@@ -201,6 +201,7 @@ export function postPage(post: Post, dataset: Dataset, dev: boolean): string {
         <p class="note">${city.name} ranks ${post.rank} of ${post.cohortSize} for this metric. Peer median: ${money(post.median)} (${signedPct(post.pctFromMedian)}).${post.peerBandWidened ? ' Population band was widened to fill the peer set.' : ''}${spec.metric === 'police' ? ' Police $ / crime is police spending per resident divided by crimes per resident. Lower means less police spending for each reported crime.' : ''} Fiscal year ${city.fiscalYear}.</p>
       </section>
       ${city.slug === 'burbank' && spec.metric === 'utilities' ? burbankUtilityExplain() : ''}
+      ${city.slug === 'burbank' && spec.metric === 'police' ? burbankPoliceExplain() : ''}
     </article>`
   return layout({
     dev,
@@ -209,6 +210,20 @@ export function postPage(post: Post, dataset: Dataset, dev: boolean): string {
     body,
     path: `/posts/${post.slug}/`,
   })
+}
+
+function burbankPoliceExplain(): string {
+  return `
+      <section class="panel">
+        <h2>What Burbank's police number means</h2>
+        <p>This is tax-side city spending, not a utility bill. The $654 per resident is Burbank's FY2024 municipal police current operating cost ($69.1 million) divided by 105,603 residents. It is paid from the city's general operations, mainly taxes and other general revenue. It is not an average household "police bill," and it is not what a deputy-sheriff city pays the county.</p>
+        <p>Burbank is high-middle, not an outlier. It ranks 6 of 21 and sits 50% above the peer median of $435. Santa Monica ($1,279), San Francisco ($863), Los Angeles ($855), Inglewood ($817), and Pasadena ($772) spend more. Vista, Compton, San Marcos, and Menifee spend in the mid-$200s.</p>
+        <p>Reported index crime is also mid-high, and it is mostly property crime. Burbank's violent rate is 3.3 per 1,000 — below Los Angeles (6.8), Inglewood (6.6), Santa Monica (6.0), and San Francisco (4.7). Property crime is 23.8 per 1,000, near Compton's property rate and above Glendale (18.0) and San Diego (15.7). Combined crime is 27.1 per 1,000, also rank 6 of 21. Spending rank and crime rank match. That is a coincidence in this table, not proof that the extra dollars bought less crime or more safety.</p>
+        <p>Police $ / crime is a ratio, not a grade. Burbank is about $24,100 per reported index crime, in the middle of the pack. Compton's $7,801 looks "cheap" because violent crime is 12.0 per 1,000, not because Compton is a model. San Marcos's $49,180 looks "expensive" because crime is very low. The ratio punishes quiet cities and rewards high-crime cities. Do not read it as efficiency.</p>
+        <p>The denominator is residents, not the people police actually cover. Burbank has a large daytime commercial load (studios, media, and visitors). Those workers and guests are in the workload and in some of the crime counts. They are not in the 105,603. That inflates per-resident cost the same way it does for utilities, just less extremely.</p>
+        <p>Glendale is the closest local comparison: a municipal PD next door. Glendale spends $605 per resident, with violent crime 2.3 and property crime 18.0. Burbank spends more and reports more index crime. That can mean more calls, more commercial activity, different reporting, or a worse return. This table cannot say which.</p>
+        <p>What it does not infer: that Burbank is overpoliced, underpoliced, or wasting money. The figures are current operating expenditures from the State Controller (form CURR_EXP_POLICE) and FBI index crimes from OpenJustice (homicide, rape, robbery, aggravated assault; burglary, theft, auto theft, arson). Traffic stops, citations, and most misdemeanors are missing. Finance year FY2024 and the crime calendar year do not line up exactly. Higher spending is not a claim that crime should be lower.</p>
+      </section>`
 }
 
 function burbankUtilityExplain(): string {
