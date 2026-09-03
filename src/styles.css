@@ -212,6 +212,7 @@ h2 {
 
 .table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 table.data {
@@ -223,15 +224,26 @@ table.data {
 
 table.data th,
 table.data td {
-  padding: 0.45rem 0.4rem;
+  padding: 0.45rem 0.35rem;
   border-bottom: 1px solid var(--rule);
   text-align: left;
+}
+
+table.data td {
   white-space: nowrap;
 }
 
 table.data th {
   color: var(--muted);
   font-weight: 600;
+  white-space: normal;
+  line-height: 1.2;
+  vertical-align: bottom;
+  max-width: 6.25rem;
+}
+
+table.data th:first-child {
+  max-width: 9rem;
 }
 
 table.data th[data-sort] {
@@ -276,7 +288,7 @@ table.data th[data-sort]::after {
   display: inline-block;
   width: 0.55em;
   height: 0.85em;
-  margin-left: 0.4em;
+  margin-left: 0.25em;
   vertical-align: -0.12em;
   opacity: 0.55;
   background-color: currentColor;
