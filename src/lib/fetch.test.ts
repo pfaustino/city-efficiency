@@ -6,6 +6,8 @@ import {
   parseCensusTable,
   parseCrimeCsv,
   parseGazetteerPlaces,
+  parseNcicMappingTable,
+  parsePersonnelCsv,
   splitCsvLine,
 } from './fetch.ts'
 
@@ -18,7 +20,65 @@ describe('parseCrimeCsv', () => {
     ].join('\n')
     const rows = parseCrimeCsv(csv)
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({ year: 2024, agency: 'Burbank', violent: 400, property: 2200 })
+    expect(rows[0]).toMatchObject({
+      year: 2024,
+      agency: 'Burbank',
+      violent: 400,
+      property: 2200,
+      violentCleared: null,
+      propertyCleared: null,
+    })
+  })
+
+  it('reads clearance columns when present', () => {
+    const csv = [
+      'Year,County,NCICCode,Violent_sum,Property_sum,ViolentClr_sum,PropertyClr_sum',
+      '2025,Los Angeles,Burbank,352,2512,253,967',
+    ].join('\n')
+    expect(parseCrimeCsv(csv)[0]).toMatchObject({
+      violent: 352,
+      property: 2512,
+      violentCleared: 253,
+      propertyCleared: 967,
+    })
+  })
+})
+
+describe('personnel and NCIC mapping', () => {
+  it('maps NCIC codes to municipal agencies and skips ended ones', () => {
+    const map = parseNcicMappingTable(
+      [
+        ['CntyCode', 'County', 'Code', 'Agency', 'Start', 'End'],
+        ['19', 'Los Angeles County', '1912', 'Burbank', '', ''],
+        ['19', 'Los Angeles County', '1925', 'Glendale', '', ''],
+        ['19', 'Los Angeles County', '1900', "Los Angeles Co. Sheriff's Department", '', ''],
+        ['01', 'Alameda County', '0128', 'Santa Fe RR - Alameda', '1/1/1981', '5/31/1990'],
+      ],
+      2025,
+    )
+    expect(map.get('1912')).toBe('Burbank')
+    expect(map.get('1925')).toBe('Glendale')
+    expect(map.get('1900')).toBe("Los Angeles Co. Sheriff's Department")
+    expect(map.has('0128')).toBe(false)
+  })
+
+  it('joins the latest sworn snapshot onto agency names', () => {
+    const map = new Map([
+      ['1912', 'Burbank'],
+      ['1925', 'Glendale'],
+    ])
+    const csv = [
+      'YEAR,NCIC_AGENCY,FUNDED_NON_JAIL_SWORN_TOTAL',
+      '2024,1912,140',
+      '2025,1912,146',
+      '2025,1925,256',
+      '2025,9999,10',
+    ].join('\n')
+    const rows = parsePersonnelCsv(csv, map)
+    expect(rows).toEqual([
+      { year: 2025, agency: 'Burbank', sworn: 146 },
+      { year: 2025, agency: 'Glendale', sworn: 256 },
+    ])
   })
 })
 

@@ -1,10 +1,12 @@
 import {
+  clearancePct,
   crimePerThousand,
   growthPct,
   isEnterpriseHeavy,
   isIndustrialOutlier,
   parseMoney,
   perResident,
+  ratePerThousand,
   taxTake,
 } from './metrics.ts'
 import { censusPlaceToCityName, dojAgencyToCityName, slugify } from './names.ts'
@@ -56,6 +58,37 @@ export type CrimeRow = {
   agency: string
   violent: number
   property: number
+  violentCleared: number | null
+  propertyCleared: number | null
+}
+
+export type PersonnelRow = {
+  year: number
+  agency: string
+  sworn: number
+}
+
+export type StaffingFields = Pick<
+  City,
+  | 'swornOfficers'
+  | 'officersPer1000'
+  | 'violentCleared'
+  | 'propertyCleared'
+  | 'violentClearancePct'
+  | 'propertyClearancePct'
+  | 'staffingAvailable'
+>
+
+export function emptyStaffingFields(): StaffingFields {
+  return {
+    swornOfficers: null,
+    officersPer1000: null,
+    violentCleared: null,
+    propertyCleared: null,
+    violentClearancePct: null,
+    propertyClearancePct: null,
+    staffingAvailable: false,
+  }
 }
 
 export type RawInputs = {
@@ -68,8 +101,10 @@ export type RawInputs = {
   housing: HousingRow[]
   race: RaceRow[]
   crime: CrimeRow[]
+  personnel?: PersonnelRow[]
   acsVintage: string | null
   crimeYear: number | null
+  personnelYear?: number | null
   healthcare?: HealthcareBundle
 }
 
@@ -93,6 +128,7 @@ export function buildDataset(raw: RawInputs): Dataset {
 
   resolveDuplicateSlugs(cities)
   if (raw.healthcare) applyHealthcare(cities, raw.healthcare)
+  if (raw.personnel) applyStaffing(cities, raw.personnel)
 
   const { posts } = assignPeersAndPosts(cities)
   const sources: SourceVintage = {
@@ -101,6 +137,7 @@ export function buildDataset(raw: RawInputs): Dataset {
     acsVintage: raw.acsVintage,
     hospitalVintage: raw.healthcare?.hospitalVintage ?? null,
     crimeYear: raw.crimeYear,
+    personnelYear: raw.personnelYear ?? null,
     generatedAt: new Date().toISOString(),
   }
   return { cities, posts, sources }
@@ -117,6 +154,33 @@ export function applyRace(cities: City[], rows: RaceRow[]): void {
     city.asianNonHispanicPct = race?.asianNonHispanicPct ?? null
     city.otherPct = race?.otherPct ?? null
     city.raceAvailable = race?.hispanicPct !== null && race?.hispanicPct !== undefined
+  }
+}
+
+export function applyCrime(cities: City[], rows: CrimeRow[], year: number | null): void {
+  const crimeByName = indexCrime(rows, year)
+  for (const city of cities) {
+    const nameKey = city.slug.replaceAll('-', ' ')
+    const crime = crimeByName.get(nameKey)
+    city.violentCrime = crime?.violent ?? null
+    city.propertyCrime = crime?.property ?? null
+    city.crimePer1000 = crime ? crimePerThousand(crime.violent, crime.property, city.population) : null
+    city.crimeAvailable = Boolean(crime)
+    city.violentCleared = crime?.violentCleared ?? null
+    city.propertyCleared = crime?.propertyCleared ?? null
+    city.violentClearancePct = clearancePct(crime?.violentCleared ?? null, crime?.violent ?? null)
+    city.propertyClearancePct = clearancePct(crime?.propertyCleared ?? null, crime?.property ?? null)
+  }
+}
+
+export function applyStaffing(cities: City[], rows: PersonnelRow[]): void {
+  const byName = indexPersonnel(rows)
+  for (const city of cities) {
+    const nameKey = city.slug.replaceAll('-', ' ')
+    const staff = byName.get(nameKey)
+    city.swornOfficers = staff?.sworn ?? null
+    city.officersPer1000 = staff ? ratePerThousand(staff.sworn, city.population) : null
+    city.staffingAvailable = Boolean(staff)
   }
 }
 
@@ -221,6 +285,11 @@ function assembleCity(
     propertyCrime: crime?.property ?? null,
     crimePer1000: crime ? crimePerThousand(crime.violent, crime.property, population) : null,
     crimeAvailable: Boolean(crime),
+    ...emptyStaffingFields(),
+    violentCleared: crime?.violentCleared ?? null,
+    propertyCleared: crime?.propertyCleared ?? null,
+    violentClearancePct: clearancePct(crime?.violentCleared ?? null, crime?.violent ?? null),
+    propertyClearancePct: clearancePct(crime?.propertyCleared ?? null, crime?.property ?? null),
     policeModel: 'unknown',
     enterpriseHeavy: isEnterpriseHeavy(totalSpend, governmentalCurrentSpend),
     industrialOutlier: isIndustrialOutlier(name, population),
@@ -312,8 +381,30 @@ function indexCrime(rows: CrimeRow[], year: number | null): Map<string, CrimeRow
     }
     existing.violent += row.violent
     existing.property += row.property
+    existing.violentCleared = addCount(existing.violentCleared, row.violentCleared)
+    existing.propertyCleared = addCount(existing.propertyCleared, row.propertyCleared)
   }
   return map
+}
+
+function indexPersonnel(rows: PersonnelRow[]): Map<string, PersonnelRow> {
+  const map = new Map<string, PersonnelRow>()
+  for (const row of rows) {
+    const cityName = dojAgencyToCityName(row.agency)
+    if (!cityName) continue
+    const existing = map.get(cityName)
+    if (!existing) {
+      map.set(cityName, { ...row, agency: cityName })
+      continue
+    }
+    existing.sworn += row.sworn
+  }
+  return map
+}
+
+function addCount(a: number | null, b: number | null): number | null {
+  if (a === null && b === null) return null
+  return (a ?? 0) + (b ?? 0)
 }
 
 function resolveDuplicateSlugs(cities: City[]): void {

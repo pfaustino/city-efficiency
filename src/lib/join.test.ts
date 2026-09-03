@@ -72,9 +72,21 @@ describe('buildDataset', () => {
           otherPct: 7.4,
         },
       ],
-      crime: [{ year: 2024, county: 'Los Angeles', agency: 'Burbank', violent: 400, property: 2200 }],
+      crime: [
+        {
+          year: 2024,
+          county: 'Los Angeles',
+          agency: 'Burbank',
+          violent: 400,
+          property: 2200,
+          violentCleared: 280,
+          propertyCleared: 900,
+        },
+      ],
+      personnel: [{ year: 2025, agency: 'Burbank', sworn: 146 }],
       acsVintage: 'ACS 5-year 2023',
       crimeYear: 2024,
+      personnelYear: 2025,
     })
 
     expect(dataset.cities).toHaveLength(1)
@@ -84,6 +96,11 @@ describe('buildDataset', () => {
     expect(Math.round(burbank.parksPerResident ?? 0)).toBe(155)
     expect(Math.round(burbank.utilityPerResident ?? 0)).toBe(1026)
     expect(burbank.crimeAvailable).toBe(true)
+    expect(burbank.swornOfficers).toBe(146)
+    expect(burbank.officersPer1000).toBeCloseTo(1.4, 1)
+    expect(burbank.violentClearancePct).toBeCloseTo(70)
+    expect(burbank.staffingAvailable).toBe(true)
+    expect(dataset.sources.personnelYear).toBe(2025)
     expect(burbank.medianHomeValue).toBe(1_100_000)
     expect(burbank.hispanicPct).toBeCloseTo(27.4)
     expect(burbank.raceAvailable).toBe(true)

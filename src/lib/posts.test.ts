@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { emptyHealthcareFields } from './healthcare.ts'
+import { emptyStaffingFields } from './join.ts'
 import { buildHealthcarePost, buildPost, buildRacePost, canWritePost, METRIC_SPECS } from './posts.ts'
 import type { City } from './types.ts'
 
@@ -32,6 +33,7 @@ function city(partial: Partial<City> & Pick<City, 'slug' | 'name' | 'population'
     otherPct: null,
     raceAvailable: false,
     ...emptyHealthcareFields(),
+    ...emptyStaffingFields(),
     violentCrime: 400,
     propertyCrime: 2200,
     crimePer1000: 24.6,

@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fetchCrime, fetchHealthcare, fetchHousing, fetchRace, fetchSpendLines, fetchTaxLines, fetchTotals } from '../src/lib/fetch.ts'
-import { applyRace, applyUtilities, buildDataset } from '../src/lib/join.ts'
+import { fetchCrime, fetchHealthcare, fetchHousing, fetchPersonnel, fetchRace, fetchSpendLines, fetchTaxLines, fetchTotals } from '../src/lib/fetch.ts'
+import { applyCrime, applyRace, applyStaffing, applyUtilities, buildDataset } from '../src/lib/join.ts'
 import { applyHealthcare } from '../src/lib/healthcare.ts'
 import type { City, SourceVintage } from '../src/lib/types.ts'
 
@@ -21,6 +21,10 @@ async function main(): Promise<void> {
   }
   if (process.argv.includes('--healthcare-only')) {
     await patchHealthcare()
+    return
+  }
+  if (process.argv.includes('--staffing-only')) {
+    await patchStaffing()
     return
   }
 
@@ -48,9 +52,10 @@ async function main(): Promise<void> {
   console.log(`Race rows: ${race.rows.length} (${race.vintage ?? 'unavailable'})`)
   console.log(`Healthcare places: ${healthcare.places.length}; hospitals: ${healthcare.hospitals.length}`)
 
-  console.log('Fetching OpenJustice crime…')
-  const crime = await fetchCrime()
+  console.log('Fetching OpenJustice crime and personnel…')
+  const [crime, personnel] = await Promise.all([fetchCrime(), fetchPersonnel()])
   console.log(`Crime rows: ${crime.rows.length} (year ${crime.year ?? 'unavailable'})`)
+  console.log(`Personnel rows: ${personnel.rows.length} (year ${personnel.year ?? 'unavailable'})`)
 
   const dataset = buildDataset({
     fiscalYear,
@@ -62,8 +67,10 @@ async function main(): Promise<void> {
     housing: housing.rows,
     race: race.rows,
     crime: crime.rows,
+    personnel: personnel.rows,
     acsVintage: housing.vintage ?? race.vintage,
     crimeYear: crime.year,
+    personnelYear: personnel.year,
     healthcare,
   })
 
@@ -97,6 +104,27 @@ async function patchRace(): Promise<void> {
   writeJson(citiesPath, cities)
   const withRace = cities.filter((city) => city.raceAvailable).length
   console.log(`Updated race shares for ${withRace} of ${cities.length} cities`)
+}
+
+async function patchStaffing(): Promise<void> {
+  const citiesPath = join(root, 'data', 'cities.json')
+  const sourcesPath = join(root, 'data', 'sources.json')
+  const cities = JSON.parse(readFileSync(citiesPath, 'utf8')) as City[]
+  console.log('Fetching OpenJustice crime clearances and law-enforcement personnel…')
+  const [crime, personnel] = await Promise.all([fetchCrime(), fetchPersonnel()])
+  console.log(`Crime rows: ${crime.rows.length} (year ${crime.year ?? 'unavailable'})`)
+  console.log(`Personnel rows: ${personnel.rows.length} (year ${personnel.year ?? 'unavailable'})`)
+  applyCrime(cities, crime.rows, crime.year)
+  applyStaffing(cities, personnel.rows)
+  writeJson(citiesPath, cities)
+  const sources = JSON.parse(readFileSync(sourcesPath, 'utf8')) as SourceVintage
+  sources.crimeYear = crime.year
+  sources.personnelYear = personnel.year
+  writeJson(sourcesPath, sources)
+  const withStaff = cities.filter((city) => city.staffingAvailable).length
+  const withClearance = cities.filter((city) => city.violentClearancePct !== null).length
+  console.log(`Updated sworn staffing for ${withStaff} of ${cities.length} cities`)
+  console.log(`Updated clearance rates for ${withClearance} of ${cities.length} cities`)
 }
 
 async function patchHealthcare(): Promise<void> {

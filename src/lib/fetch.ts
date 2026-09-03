@@ -11,7 +11,8 @@ import {
 } from './healthcare.ts'
 import { parseMoney, raceShares } from './metrics.ts'
 import { censusPlaceToCityName } from './names.ts'
-import type { CrimeRow, HousingRow, RaceRow, ScoLineRow, ScoTotalRow } from './join.ts'
+import type { CrimeRow, HousingRow, PersonnelRow, RaceRow, ScoLineRow, ScoTotalRow } from './join.ts'
+import { parseXlsxSheet } from './xlsx.ts'
 
 const SCO = 'https://bythenumbers.sco.ca.gov/resource'
 const PAGE = 1000
@@ -600,6 +601,8 @@ export function parseCrimeCsv(text: string): CrimeRow[] {
   const agencyIdx = findCol(header, ['nciccode', 'ncic', 'agency'])
   const violentIdx = findCol(header, ['violent_sum', 'violent'])
   const propertyIdx = findCol(header, ['property_sum', 'property'])
+  const violentClrIdx = findCol(header, ['violentclrsum', 'violentclr'])
+  const propertyClrIdx = findCol(header, ['propertyclrsum', 'propertyclr'])
   if (yearIdx < 0 || agencyIdx < 0 || violentIdx < 0 || propertyIdx < 0) return []
 
   const rows: CrimeRow[] = []
@@ -616,9 +619,144 @@ export function parseCrimeCsv(text: string): CrimeRow[] {
       agency: cols[agencyIdx] ?? '',
       violent,
       property,
+      violentCleared: violentClrIdx >= 0 ? (parseMoney(cols[violentClrIdx]) ?? 0) : null,
+      propertyCleared: propertyClrIdx >= 0 ? (parseMoney(cols[propertyClrIdx]) ?? 0) : null,
     })
   }
   return rows
+}
+
+export async function fetchPersonnel(): Promise<{ rows: PersonnelRow[]; year: number | null }> {
+  const [csv, mapping] = await Promise.all([downloadPersonnelCsv(), downloadNcicMapping()])
+  if (!csv || mapping.size === 0) return { rows: [], year: null }
+  const rows = parsePersonnelCsv(csv, mapping)
+  const year = rows.reduce((max, row) => Math.max(max, row.year), 0)
+  return { rows, year: year || null }
+}
+
+async function downloadPersonnelCsv(): Promise<string | null> {
+  const fromApi = await findOpenJusticeDatasetFile('Law Enforcement Personnel', (name) => {
+    return /personnel/i.test(name) && name.endsWith('.csv') && !/criminal justice/i.test(name)
+  })
+  const candidates = [
+    fromApi,
+    'https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2026-07/Law_Enforcement_Personnel_1991-2025.csv',
+  ].filter((item): item is string => Boolean(item))
+  for (const url of candidates) {
+    try {
+      const text = await getText(url)
+      if (text.includes('FUNDED_NON_JAIL_SWORN_TOTAL') || text.includes('NCIC_AGENCY')) return text
+    } catch {
+      // try the next published filename
+    }
+  }
+  return null
+}
+
+async function downloadNcicMapping(): Promise<Map<string, string>> {
+  const fromApi = await findOpenJusticeDatasetFile('Agency Name - Jurisdiction Listing', (name) => {
+    return /ncic/i.test(name) && name.endsWith('.xlsx')
+  })
+  const candidates = [
+    fromApi,
+    'https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2026-07/NCIC%20Code%20Jurisdiction%20List_06182026.xlsx',
+  ].filter((item): item is string => Boolean(item))
+  for (const url of candidates) {
+    try {
+      const bytes = await getBytes(url)
+      const map = parseNcicMappingTable(await parseXlsxSheet(bytes))
+      if (map.size > 0) return map
+    } catch {
+      // try the next published filename
+    }
+  }
+  return new Map()
+}
+
+export async function findOpenJusticeDatasetFile(
+  title: string,
+  test: (filename: string) => boolean,
+): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({
+      'filter[title][value]': title,
+      include: 'field_source',
+    })
+    const payload = await getJson<{
+      included?: Array<{ attributes?: { filename?: string; uri?: { url?: string } } }>
+    }>(`https://data-openjustice.doj.ca.gov/jsonapi/node/dataset?${params}`)
+    for (const item of payload.included ?? []) {
+      const name = item.attributes?.filename ?? ''
+      const url = item.attributes?.uri?.url
+      if (!url || !test(name)) continue
+      return new URL(url, 'https://data-openjustice.doj.ca.gov/').href
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+export function parsePersonnelCsv(text: string, ncicToAgency: Map<string, string>): PersonnelRow[] {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim())
+  if (lines.length < 2) return []
+  const header = splitCsvLine(lines[0]).map((col) => col.trim())
+  const yearIdx = findCol(header, ['year'])
+  const ncicIdx = findCol(header, ['ncicagency', 'ncic'])
+  const swornIdx = findCol(header, ['fundednonjailsworntotal'])
+  if (yearIdx < 0 || ncicIdx < 0 || swornIdx < 0) return []
+
+  const latest = latestYear(lines, yearIdx)
+  const rows: PersonnelRow[] = []
+  for (let i = 1; i < lines.length; i += 1) {
+    const cols = splitCsvLine(lines[i])
+    const year = Number(cols[yearIdx])
+    if (year !== latest) continue
+    const sworn = parseMoney(cols[swornIdx])
+    if (!Number.isFinite(year) || sworn === null) continue
+    const agency = ncicToAgency.get(normalizeNcic(cols[ncicIdx] ?? ''))
+    if (!agency) continue
+    rows.push({ year, agency, sworn })
+  }
+  return rows
+}
+
+export function parseNcicMappingTable(table: string[][], year = 2025): Map<string, string> {
+  if (table.length < 2) return new Map()
+  const header = table[0].map((col) => col.toLowerCase().replace(/[^a-z0-9]/g, ''))
+  const codeIdx = header.findIndex((col) => col === 'code' || col === 'ncic' || col === 'nciccode')
+  const agencyIdx = header.findIndex((col) => col === 'agency' || col === 'agencyname')
+  const endIdx = header.findIndex((col) => col === 'end')
+  if (codeIdx < 0 || agencyIdx < 0) return new Map()
+
+  const map = new Map<string, string>()
+  for (const row of table.slice(1)) {
+    const code = normalizeNcic(row[codeIdx] ?? '')
+    const agency = (row[agencyIdx] ?? '').trim()
+    if (!/^[0-9a-z]{4}$/.test(code) || !agency) continue
+    if (endIdx >= 0 && endedBefore(row[endIdx] ?? '', year)) continue
+    map.set(code, agency)
+  }
+  return map
+}
+
+function normalizeNcic(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function endedBefore(end: string, year: number): boolean {
+  const match = end.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+  if (!match) return false
+  return Number(match[3]) < year
+}
+
+function latestYear(lines: string[], yearIdx: number): number {
+  let max = 0
+  for (let i = 1; i < lines.length; i += 1) {
+    const year = Number(splitCsvLine(lines[i])[yearIdx])
+    if (Number.isFinite(year) && year > max) max = year
+  }
+  return max
 }
 
 function findCol(header: string[], names: string[]): number {
@@ -670,4 +808,12 @@ async function getText(url: string): Promise<string> {
     throw new Error(`GET ${url} failed: ${response.status}`)
   }
   return response.text()
+}
+
+async function getBytes(url: string): Promise<Uint8Array> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`GET ${url} failed: ${response.status}`)
+  }
+  return new Uint8Array(await response.arrayBuffer())
 }

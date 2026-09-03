@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clearancePct,
   crimePerThousand,
   growthPct,
   pearson,
@@ -38,6 +39,8 @@ describe('growth and crime', () => {
 
   it('splits Burbank violent and property rates', () => {
     expect(ratePerThousand(352, 105_603)).toBeCloseTo(3.3, 1)
+    expect(clearancePct(253, 352)).toBeCloseTo(71.9, 0)
+    expect(clearancePct(0, 0)).toBeNull()
     expect(ratePerThousand(2512, 105_603)).toBeCloseTo(23.8, 1)
   })
 

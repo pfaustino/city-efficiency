@@ -121,6 +121,8 @@ export function cityPage(city: City, dataset: Dataset, dev: boolean): string {
         ${metricCard('Utilities / resident', moneyOrDash(city.utilityPerResident), city.utilityPerResident && city.utilityPerResident > 0 ? 'Electric, water, gas, sewer, solid waste' : 'No municipal utility total')}
         ${metricCard('Violent / 1,000', crimeRateLabel(city, city.violentCrime, 'Not published'), city.crimeAvailable ? 'Homicide, rape, robbery, aggravated assault' : 'No city-level agency total')}
         ${metricCard('Property / 1,000', crimeRateLabel(city, city.propertyCrime, 'Not published'), city.crimeAvailable ? 'Burglary, theft, auto theft, arson' : 'No city-level agency total')}
+        ${metricCard('Officers / 1,000', city.officersPer1000 === null ? '—' : number(city.officersPer1000, 1), city.staffingAvailable ? 'Funded non-jail sworn, October 31' : 'No municipal PD staffing total')}
+        ${metricCard('Violent cleared', city.violentClearancePct === null ? '—' : pct(city.violentClearancePct, 0), city.violentClearancePct === null ? 'No city-level clearance total' : 'UCR clear by arrest or exceptional means')}
         ${metricCard('Uninsured', city.uninsuredPct === null ? '—' : `${number(city.uninsuredPct, 1)}%`, 'ACS 5-year, all ages')}
         ${metricCard('Miles to hospital', city.milesToHospital === null ? '—' : number(city.milesToHospital, 1), 'City center to nearest HCAI hospital')}
         ${metricCard('Home value', moneyOrDash(city.medianHomeValue), 'ACS median owner-occupied value')}
@@ -148,7 +150,7 @@ export function cityPage(city: City, dataset: Dataset, dev: boolean): string {
           ${spendPosts.length === 0 ? '<p>This city is below the 25,000-resident cutoff used for generated posts.</p>' : `<ul class="post-list">${spendPosts.map((post) => `<li><a href="${base}/posts/${post.slug}/">${escapeHtml(post.title)}</a></li>`).join('')}</ul>`}
         </div>
       </section>
-      <p class="note">Fiscal year ${city.fiscalYear}. Housing vintage: ${escapeHtml(dataset.sources.acsVintage ?? 'unavailable')}. Crime year: ${dataset.sources.crimeYear ?? 'unavailable'}.</p>
+      <p class="note">Fiscal year ${city.fiscalYear}. Housing vintage: ${escapeHtml(dataset.sources.acsVintage ?? 'unavailable')}. Crime year: ${dataset.sources.crimeYear ?? 'unavailable'}. Staffing year: ${dataset.sources.personnelYear ?? 'unavailable'}.</p>
     </article>`
   return layout({
     dev,
@@ -186,7 +188,10 @@ export function postPage(post: Post, dataset: Dataset, dev: boolean): string {
                   ? sortHeader('Utility spend', 'number', 'Municipal electric, water, gas, sewer, and solid waste operating spending. Excludes depreciation. Investor-owned utility cities may be near zero.')
                   : `${sortHeader('Violent / 1,000', 'number', 'FBI index violent crimes per 1,000 residents: homicide, rape, robbery, and aggravated assault. Does not include traffic stops or most misdemeanors.')}
                 ${sortHeader('Property / 1,000', 'number', 'FBI index property crimes per 1,000 residents: burglary, theft, auto theft, and arson.')}`}
-                ${spec.metric === 'police' ? sortHeader('Police $ / crime', 'number', 'Police spending per resident divided by reported index crimes per resident. Lower means less police spending for each reported crime.') : ''}
+                ${spec.metric === 'police' ? `${sortHeader('Officers / 1,000', 'number', 'Funded non-jail sworn officers per 1,000 residents. OpenJustice one-day survey, October 31. Sheriff, CHP, and campus agencies are excluded.')}
+                ${sortHeader('Violent cleared %', 'number', 'Share of FBI index violent crimes cleared by arrest or exceptional means in that calendar year. A clearance can be for a prior-year crime, so the rate can exceed 100%.')}
+                ${sortHeader('Property cleared %', 'number', 'Share of FBI index property crimes cleared by arrest or exceptional means in that calendar year. A clearance can be for a prior-year crime, so the rate can exceed 100%.')}
+                ${sortHeader('Police $ / crime', 'number', 'Police spending per resident divided by reported index crimes per resident. Lower means less police spending for each reported crime.')}` : ''}
                 ${sortHeader('Population', 'number', 'State Controller population estimate for this fiscal year.')}
               </tr>
             </thead>
@@ -198,10 +203,10 @@ export function postPage(post: Post, dataset: Dataset, dev: boolean): string {
             </tbody>
           </table>
         </div>
-        <p class="note">${city.name} ranks ${post.rank} of ${post.cohortSize} for this metric. Peer median: ${money(post.median)} (${signedPct(post.pctFromMedian)}).${post.peerBandWidened ? ' Population band was widened to fill the peer set.' : ''}${spec.metric === 'police' ? ' Police $ / crime is police spending per resident divided by crimes per resident. Lower means less police spending for each reported crime.' : ''} Fiscal year ${city.fiscalYear}.</p>
+        <p class="note">${city.name} ranks ${post.rank} of ${post.cohortSize} for this metric. Peer median: ${money(post.median)} (${signedPct(post.pctFromMedian)}).${post.peerBandWidened ? ' Population band was widened to fill the peer set.' : ''}${spec.metric === 'police' ? ` Officers / 1,000 is the OpenJustice October 31 sworn count. Clearance rates are UCR clear-by-arrest or exceptional means for that crime year; a clearance can be for a prior-year crime. Police $ / crime is police spending per resident divided by crimes per resident. Lower means less police spending for each reported crime. Staffing year: ${dataset.sources.personnelYear ?? 'unavailable'}.` : ''} Fiscal year ${city.fiscalYear}.</p>
       </section>
       ${city.slug === 'burbank' && spec.metric === 'utilities' ? burbankUtilityExplain() : ''}
-      ${city.slug === 'burbank' && spec.metric === 'police' ? burbankPoliceExplain() : ''}
+      ${city.slug === 'burbank' && spec.metric === 'police' ? burbankPoliceExplain(city, cohort) : ''}
     </article>`
   return layout({
     dev,
@@ -212,7 +217,30 @@ export function postPage(post: Post, dataset: Dataset, dev: boolean): string {
   })
 }
 
-function burbankPoliceExplain(): string {
+function burbankPoliceExplain(city: City, cohort: City[]): string {
+  const glendale = cohort.find((item) => item.slug === 'glendale')
+  const officers = city.swornOfficers === null ? '—' : number(city.swornOfficers)
+  const perThousand = city.officersPer1000 === null ? '—' : number(city.officersPer1000, 1)
+  const violentClr = city.violentClearancePct === null ? '—' : pct(city.violentClearancePct, 0)
+  const propertyClr = city.propertyClearancePct === null ? '—' : pct(city.propertyClearancePct, 0)
+  const violentPerOfficer =
+    city.swornOfficers && city.swornOfficers > 0 && city.violentCrime !== null
+      ? number(city.violentCrime / city.swornOfficers, 1)
+      : null
+  let glendaleStaff = ''
+  let glendaleClear = ''
+  let glendaleWorkload = ''
+  if (glendale) {
+    if (glendale.swornOfficers !== null && glendale.officersPer1000 !== null) {
+      glendaleStaff = ` Glendale reports ${number(glendale.swornOfficers)} sworn (${number(glendale.officersPer1000, 1)} per 1,000)`
+      if (glendale.violentCrime !== null && glendale.swornOfficers > 0) {
+        glendaleWorkload = ` That is ${number(glendale.violentCrime / glendale.swornOfficers, 1)} reported violent crimes per officer.`
+      }
+    }
+    if (glendale.violentClearancePct !== null && glendale.propertyClearancePct !== null) {
+      glendaleClear = `, and clears ${pct(glendale.violentClearancePct, 0)} of violent and ${pct(glendale.propertyClearancePct, 0)} of property index crime.`
+    }
+  }
   return `
       <section class="panel">
         <h2>What Burbank's police number means</h2>
@@ -221,8 +249,9 @@ function burbankPoliceExplain(): string {
         <p>Reported index crime is also mid-high, and it is mostly property crime. Burbank's violent rate is 3.3 per 1,000 — below Los Angeles (6.8), Inglewood (6.6), Santa Monica (6.0), and San Francisco (4.7). Property crime is 23.8 per 1,000, near Compton's property rate and above Glendale (18.0) and San Diego (15.7). Combined crime is 27.1 per 1,000, also rank 6 of 21. Spending rank and crime rank match. That is a coincidence in this table, not proof that the extra dollars bought less crime or more safety.</p>
         <p>Police $ / crime is a ratio, not a grade. Burbank is about $24,100 per reported index crime, in the middle of the pack. Compton's $7,801 looks "cheap" because violent crime is 12.0 per 1,000, not because Compton is a model. San Marcos's $49,180 looks "expensive" because crime is very low. The ratio punishes quiet cities and rewards high-crime cities. Do not read it as efficiency.</p>
         <p>The denominator is residents, not the people police actually cover. Burbank has a large daytime commercial load (studios, media, and visitors). Those workers and guests are in the workload and in some of the crime counts. They are not in the 105,603. That inflates per-resident cost the same way it does for utilities, just less extremely.</p>
+        <p>Staffing and clearances are now in the table. Burbank reports ${officers} funded non-jail sworn officers, or ${perThousand} per 1,000 residents. It cleared ${violentClr} of violent index crime and ${propertyClr} of property index crime.${violentPerOfficer ? ` That is ${violentPerOfficer} reported violent crimes per officer.` : ''}${glendaleStaff}${glendaleClear}${glendaleWorkload} These are still not a grade. The sworn count is an October 31 snapshot. A clearance can be for a prior-year crime. Neither figure is calls for service or response time.</p>
         <p>Glendale is the closest local comparison: a municipal PD next door. Glendale spends $605 per resident, with violent crime 2.3 and property crime 18.0. Burbank spends more and reports more index crime. That can mean more calls, more commercial activity, different reporting, or a worse return. This table cannot say which.</p>
-        <p>What it does not infer: that Burbank is overpoliced, underpoliced, or wasting money. The figures are current operating expenditures from the State Controller (form CURR_EXP_POLICE) and FBI index crimes from OpenJustice (homicide, rape, robbery, aggravated assault; burglary, theft, auto theft, arson). Traffic stops, citations, and most misdemeanors are missing. Finance year FY2024 and the crime calendar year do not line up exactly. Higher spending is not a claim that crime should be lower.</p>
+        <p>What it does not infer: that Burbank is overpoliced, underpoliced, or wasting money. The figures are current operating expenditures from the State Controller (form CURR_EXP_POLICE), FBI index crimes and UCR clearances from OpenJustice, and the OpenJustice October 31 sworn survey. Traffic stops, citations, most misdemeanors, 911 calls, and response times are missing. Finance year FY2024 and the crime and staffing calendar years do not line up exactly. Higher spending is not a claim that crime should be lower.</p>
       </section>`
 }
 
@@ -471,6 +500,14 @@ function pctCell(value: number | null): string {
   return `<td data-value="${value ?? ''}">${value === null ? '—' : `${number(value, 1)}%`}</td>`
 }
 
+function pctValueCell(value: number | null): string {
+  return `<td data-value="${value ?? ''}">${value === null ? '—' : pct(value, 0)}</td>`
+}
+
+function rateCell(value: number | null): string {
+  return `<td data-value="${value ?? ''}">${value === null ? '—' : number(value, 1)}</td>`
+}
+
 function rCell(value: number | null): string {
   return `<td data-value="${value ?? ''}">${value === null ? '—' : number(value, 2)}</td>`
 }
@@ -487,7 +524,8 @@ export function methodologyPage(dataset: Dataset, dev: boolean): string {
         <li>Population growth compares the Controller estimate for ${s.scoFiscalYear} with ${s.scoPopulationPriorYear}.</li>
         <li>Housing and race/ethnicity: ${s.acsVintage ?? 'Census ACS 5-year was unavailable when this snapshot was built'}. Race reports use table B03002 (Hispanic or Latino of any race, and non-Hispanic White, Black, and Asian). Other is the remaining non-Hispanic groups. Healthcare reports use B19013 (median household income), B27001 or S2701 (uninsured), and C24010 diagnosing and treating practitioners.</li>
         <li>Hospitals and ERs: ${s.hospitalVintage ?? 'HCAI licensed facility listing was unavailable when this snapshot was built'}. Counts are open general acute care parent hospitals. Miles are from the Census city centroid to the nearest of those hospitals. CDC PLACES modeled adult uninsured rates are not used; ACS covers all ages.</li>
-        <li>Crime: CA DOJ OpenJustice Crimes and Clearances${s.crimeYear ? `, calendar year ${s.crimeYear}` : ', city-level file unavailable in this snapshot'}. Tables show violent and property rates separately. Those are FBI index crimes (homicide, rape, robbery, aggravated assault; burglary, theft, auto theft, and arson). Traffic stops, citations, and most misdemeanors are not included.</li>
+        <li>Crime: CA DOJ OpenJustice Crimes and Clearances${s.crimeYear ? `, calendar year ${s.crimeYear}` : ', city-level file unavailable in this snapshot'}. Tables show violent and property rates separately. Those are FBI index crimes (homicide, rape, robbery, aggravated assault; burglary, theft, auto theft, and arson). Traffic stops, citations, and most misdemeanors are not included. Clearance rates are UCR clear-by-arrest or exceptional means. A clearance recorded in this year can be for a crime from an earlier year, so the rate can exceed 100%.</li>
+        <li>Police staffing: CA DOJ OpenJustice Law Enforcement Personnel${s.personnelYear ? `, October 31, ${s.personnelYear}` : ', city-level file unavailable in this snapshot'}. Counts are funded non-jail sworn officers. Sheriff, CHP, campus, transit, and park agencies are not assigned to a city. This is a one-day snapshot, not average annual staffing, and it is not a calls-for-service or response-time file.</li>
       </ul>
       <h2>Similar cities</h2>
       <p>Peers are California cities with at least 10,000 residents, excluding Vernon, Industry, and Irwindale. The first pass keeps cities between 0.5× and 2.0× the subject city's population. The 20 closest by log population are kept, with a small preference for the same region. If fewer than 20 remain, the band widens to 0.35–2.8×. For Burbank, Glendale and Pasadena replace Norwalk and Hesperia; Los Angeles, San Francisco, and San Diego replace Downey, Rialto, and Jurupa Valley; Chula Vista replaces San Buenaventura; and Simi Valley replaces South Gate.</p>
@@ -544,7 +582,10 @@ function peerRow(city: City, metric: PostMetric, current: boolean, dev: boolean)
   const efficiency = policeSpendPerCrime(city.policePerResident, city.crimePer1000)
   const efficiencyCell =
     metric === 'police'
-      ? `<td data-value="${efficiency ?? ''}">${efficiency === null ? '—' : money(efficiency)}</td>`
+      ? `${rateCell(city.officersPer1000)}
+    ${pctValueCell(city.violentClearancePct)}
+    ${pctValueCell(city.propertyClearancePct)}
+    <td data-value="${efficiency ?? ''}">${efficiency === null ? '—' : money(efficiency)}</td>`
       : ''
   const middleCells =
     metric === 'utilities'

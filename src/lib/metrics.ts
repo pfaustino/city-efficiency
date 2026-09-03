@@ -79,6 +79,12 @@ export function parseMoney(value: string | number | null | undefined): number | 
   return n
 }
 
+export function clearancePct(cleared: number | null, offenses: number | null): number | null {
+  if (cleared === null || offenses === null) return null
+  if (!Number.isFinite(cleared) || !Number.isFinite(offenses) || !(offenses > 0)) return null
+  return (cleared / offenses) * 100
+}
+
 export function policeSpendPerCrime(
   policePerResident: number | null,
   crimePer1000: number | null,

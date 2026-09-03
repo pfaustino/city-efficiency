@@ -54,6 +54,13 @@ export type City = {
   propertyCrime: number | null
   crimePer1000: number | null
   crimeAvailable: boolean
+  swornOfficers: number | null
+  officersPer1000: number | null
+  violentCleared: number | null
+  propertyCleared: number | null
+  violentClearancePct: number | null
+  propertyClearancePct: number | null
+  staffingAvailable: boolean
   policeModel: PoliceModel
   enterpriseHeavy: boolean
   industrialOutlier: boolean
@@ -86,6 +93,7 @@ export type SourceVintage = {
   acsVintage: string | null
   hospitalVintage?: string | null
   crimeYear: number | null
+  personnelYear?: number | null
   generatedAt: string
 }
 
