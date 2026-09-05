@@ -358,6 +358,12 @@ function healthcarePostPage(post: Post, dataset: Dataset, dev: boolean): string 
         <p>The purpose of this page is to put that coverage fact next to income before anyone treats it as a city hall grade or as “they are just richer.” It is not an argument that ${escapeHtml(city.name)} provided the insurance, that residents are healthier, or that anything should be raised or cut.</p>
       </section>
       <section class="panel">
+        <h2>What to do with this</h2>
+        <p>If you talk about coverage in ${escapeHtml(city.name)}, use this ACS 5-year, all-ages uninsured rate and put income next to it. If someone makes a healthcare claim about the city, ask them for the same definition and the same peer set.</p>
+        <p>Do not grade city hall with it. ${escapeHtml(city.name)} does not issue health insurance.</p>
+        <p>If your question is what the city spends, start on the <a href="${base}/cities/${city.slug}/">${escapeHtml(city.name)} city page</a>. Those spending tables still do not produce a verdict. Read the <a href="${base}/methodology/">methodology</a> before treating any rank as a score.</p>
+      </section>
+      <section class="panel">
         <h2>Peer comparison</h2>
         <div class="table-wrap">
           <table class="data" data-sortable>
