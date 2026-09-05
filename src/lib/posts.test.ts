@@ -168,6 +168,7 @@ describe('buildPost', () => {
       name: 'Glendale',
       population: 190_000,
       uninsuredPct: 8.1,
+      medianIncome: 100_000,
       healthcareAvailable: true,
     })
     const pasadena = city({
@@ -175,6 +176,7 @@ describe('buildPost', () => {
       name: 'Pasadena',
       population: 138_000,
       uninsuredPct: 7.4,
+      medianIncome: 110_000,
       healthcareAvailable: true,
     })
     const bySlug = new Map([
@@ -189,5 +191,10 @@ describe('buildPost', () => {
     expect(post?.rank).toBe(1)
     expect(post?.peerSlugs).toEqual(['glendale', 'pasadena'])
     expect(post?.title).toContain('6.2% uninsured')
+    expect(post?.title).toContain('the median is 7.4%')
+    expect(post?.dek).toContain('not a city insurance program')
+    expect(post?.dek).not.toContain('hospital')
+    expect(post?.paragraphs[0]).toContain('not explained by higher income alone')
+    expect(post?.paragraphs.some((paragraph) => paragraph.includes('city provided the insurance'))).toBe(true)
   })
 })

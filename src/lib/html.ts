@@ -1,5 +1,5 @@
 import { money, number, pct, signedPct, escapeHtml } from './format.ts'
-import { pearsonPairs, policeSpendPerCrime, ratePerThousand } from './metrics.ts'
+import { median, pctFromMedian, pearsonPairs, policeSpendPerCrime, ratePerThousand } from './metrics.ts'
 import { METRIC_SPECS } from './posts.ts'
 import { regionLabel } from './regions.ts'
 import type { City, Dataset, Post, PostMetric } from './types.ts'
@@ -144,8 +144,8 @@ export function cityPage(city: City, dataset: Dataset, dev: boolean): string {
         <div>
           <h2>Demographics report</h2>
           ${racePosts.length === 0 ? '<p>No ACS race report for this city.</p>' : `<ul class="post-list">${racePosts.map((post) => `<li><a href="${base}/posts/${post.slug}/">${escapeHtml(post.title)}</a></li>`).join('')}</ul>`}
-          <h2>Healthcare report</h2>
-          ${healthPosts.length === 0 ? '<p>No healthcare access report for this city.</p>' : `<ul class="post-list">${healthPosts.map((post) => `<li><a href="${base}/posts/${post.slug}/">${escapeHtml(post.title)}</a></li>`).join('')}</ul>`}
+          <h2>Uninsured report</h2>
+          ${healthPosts.length === 0 ? '<p>No ACS uninsured report for this city.</p>' : `<ul class="post-list">${healthPosts.map((post) => `<li><a href="${base}/posts/${post.slug}/">${escapeHtml(post.title)}</a></li>`).join('')}</ul>`}
           <h2>Comparison posts</h2>
           ${spendPosts.length === 0 ? '<p>This city is below the 25,000-resident cutoff used for generated posts.</p>' : `<ul class="post-list">${spendPosts.map((post) => `<li><a href="${base}/posts/${post.slug}/">${escapeHtml(post.title)}</a></li>`).join('')}</ul>`}
         </div>
@@ -348,7 +348,7 @@ function healthcarePostPage(post: Post, dataset: Dataset, dev: boolean): string 
   ]
   const body = `
     <article class="post">
-      <p class="kicker"><a href="${base}/cities/${city.slug}/">${escapeHtml(city.name)}</a> · healthcare</p>
+      <p class="kicker"><a href="${base}/cities/${city.slug}/">${escapeHtml(city.name)}</a> · uninsured</p>
       <h1>${escapeHtml(post.title)}</h1>
       <p class="lede">${escapeHtml(post.dek)}</p>
       ${post.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('\n')}
@@ -359,45 +359,22 @@ function healthcarePostPage(post: Post, dataset: Dataset, dev: boolean): string 
             <thead>
               <tr>
                 ${sortHeader('City', 'text', 'City name.')}
-                ${sortHeader('Uninsured %', 'number', 'Census ACS 5-year share with no health insurance, all ages.')}
-                ${sortHeader('Median income', 'number', 'Census ACS median household income.')}
-                ${sortHeader('Practitioners / 100k', 'number', 'ACS health diagnosing and treating practitioners per 100,000 residents. Includes doctors and other licensed clinicians, not an MD-only registry.')}
-                ${sortHeader('Hospitals / 100k', 'number', 'Open HCAI general acute care parent hospitals located in the city, per 100,000 residents.')}
-                ${sortHeader('ERs / 100k', 'number', 'Those hospitals with an emergency service level, per 100,000 residents.')}
-                ${sortHeader('Miles to hospital', 'number', 'Straight-line miles from the Census city centroid to the nearest HCAI general acute care hospital.')}
+                ${sortHeader('Uninsured %', 'number', 'Census ACS 5-year share with no health insurance, all ages. Same definition in every city.')}
+                ${sortHeader('Median income', 'number', 'Census ACS median household income. Shown so a lower uninsured rate is not read as “richer city.”')}
+                ${sortHeader('Population', 'number', 'State Controller population estimate for this fiscal year.')}
               </tr>
             </thead>
             <tbody>
               ${cohort
                 .sort((a, b) => (a.uninsuredPct ?? 999) - (b.uninsuredPct ?? 999))
-                .map((item) => healthcarePeerRow(item, item.slug === city.slug, dev))
+                .map((item) => uninsuredPeerRow(item, item.slug === city.slug, dev))
                 .join('\n')}
             </tbody>
           </table>
         </div>
-        <p class="note">${city.name} uninsured share is ${post.rank} of ${post.cohortSize} in this peer set, counting from the lowest rate. Peer median: ${number(post.median, 1)}% (${signedPct(post.pctFromMedian)}). Rank is descriptive, not a grade.${post.peerBandWidened ? ' Population band was widened to fill the peer set.' : ''} ACS vintage: ${escapeHtml(dataset.sources.acsVintage ?? 'unavailable')}. Hospitals: ${escapeHtml(dataset.sources.hospitalVintage ?? 'unavailable')}.</p>
+        <p class="note">${city.name} uninsured share is ${post.rank} of ${post.cohortSize} in this peer set, counting from the lowest rate. Peer median: ${number(post.median, 1)}% (${signedPct(post.pctFromMedian)}). Rank is descriptive, not a grade. This is not a city insurance program.${post.peerBandWidened ? ' Population band was widened to fill the peer set.' : ''} ACS vintage: ${escapeHtml(dataset.sources.acsVintage ?? 'unavailable')}.</p>
       </section>
-      <section class="panel">
-        <h2>County comparison</h2>
-        <p>Hospital supply is often a county market. These are the counties of the cities in the table above.</p>
-        <div class="table-wrap">
-          <table class="data" data-sortable>
-            <thead>
-              <tr>
-                ${sortHeader('County', 'text', 'County of a city in this peer set.')}
-                ${sortHeader('Uninsured %', 'number', 'ACS 5-year county uninsured share.')}
-                ${sortHeader('Median income', 'number', 'ACS median household income for the county.')}
-                ${sortHeader('Hospitals', 'number', 'Open HCAI general acute care parent hospitals in the county.')}
-                ${sortHeader('ERs', 'number', 'Those hospitals with an emergency service level.')}
-                ${sortHeader('Hospitals / 100k', 'number', 'County hospitals divided by ACS county population, times 100,000.')}
-              </tr>
-            </thead>
-            <tbody>
-              ${healthcareCountyRows(cohort, city.county)}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      ${city.slug === 'burbank' ? burbankUninsuredExplain(city, cohort) : ''}
     </article>`
   return layout({
     dev,
@@ -408,42 +385,47 @@ function healthcarePostPage(post: Post, dataset: Dataset, dev: boolean): string 
   })
 }
 
-function healthcarePeerRow(city: City, current: boolean, dev: boolean): string {
+function uninsuredPeerRow(city: City, current: boolean, dev: boolean): string {
   const base = siteBase(dev)
   return `<tr class="${current ? 'is-current' : ''}">
     <td><a href="${base}/cities/${city.slug}/">${escapeHtml(city.name)}</a>${current ? ' <span class="tag">This city</span>' : ''}</td>
     ${pctCell(city.uninsuredPct)}
     <td data-value="${city.medianIncome ?? ''}">${moneyOrDash(city.medianIncome)}</td>
-    <td data-value="${city.practitionersPer100k ?? ''}">${city.practitionersPer100k === null ? '—' : number(city.practitionersPer100k, 0)}</td>
-    <td data-value="${city.hospitalsPer100k ?? ''}">${city.hospitalsPer100k === null ? '—' : number(city.hospitalsPer100k, 2)}</td>
-    <td data-value="${city.ersPer100k ?? ''}">${city.ersPer100k === null ? '—' : number(city.ersPer100k, 2)}</td>
-    <td data-value="${city.milesToHospital ?? ''}">${city.milesToHospital === null ? '—' : number(city.milesToHospital, 1)}</td>
+    <td data-value="${city.population}">${number(city.population)}</td>
   </tr>`
 }
 
-function healthcareCountyRows(cohort: City[], currentCounty: string): string {
-  const seen = new Set<string>()
-  const rows: City[] = []
-  for (const city of cohort) {
-    const key = city.county.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    rows.push(city)
-  }
-  return rows
-    .sort((a, b) => (b.countyHospitalsPer100k ?? -1) - (a.countyHospitalsPer100k ?? -1))
-    .map((city) => {
-      const current = city.county.toLowerCase() === currentCounty.toLowerCase()
-      return `<tr class="${current ? 'is-current' : ''}">
-        <td>${escapeHtml(city.county)}${current ? ' <span class="tag">This county</span>' : ''}</td>
-        ${pctCell(city.countyUninsuredPct)}
-        <td data-value="${city.countyMedianIncome ?? ''}">${moneyOrDash(city.countyMedianIncome)}</td>
-        <td data-value="${city.countyHospitalCount}">${number(city.countyHospitalCount)}</td>
-        <td data-value="${city.countyErCount}">${number(city.countyErCount)}</td>
-        <td data-value="${city.countyHospitalsPer100k ?? ''}">${city.countyHospitalsPer100k === null ? '—' : number(city.countyHospitalsPer100k, 2)}</td>
-      </tr>`
+function burbankUninsuredExplain(city: City, cohort: City[]): string {
+  const uninsuredMedian = median(cohort.map((item) => item.uninsuredPct).filter((value): value is number => value !== null))
+  const incomeMedian = median(cohort.map((item) => item.medianIncome).filter((value): value is number => value !== null))
+  const rate = city.uninsuredPct === null ? '—' : `${number(city.uninsuredPct, 1)}%`
+  const income = city.medianIncome === null ? 'unpublished' : money(city.medianIncome)
+  const peerRate = uninsuredMedian === null ? 'unpublished' : `${number(uninsuredMedian, 1)}%`
+  const peerIncome =
+    city.medianIncome === null || incomeMedian === null
+      ? ''
+      : `, ${signedPct(pctFromMedian(city.medianIncome, incomeMedian))} the peer income median of ${money(incomeMedian)}`
+  const named = ['costa-mesa', 'glendale', 'pasadena', 'san-francisco']
+    .map((slug) => cohort.find((item) => item.slug === slug))
+    .filter((item): item is City => item !== undefined && item.uninsuredPct !== null)
+  const namedLines = named
+    .map((item) => {
+      const itemIncome = item.medianIncome === null ? 'unpublished income' : money(item.medianIncome)
+      return `${item.name} is ${number(item.uninsuredPct ?? 0, 1)}% uninsured at ${itemIncome}`
     })
-    .join('\n')
+    .join('; ')
+  const county =
+    city.countyUninsuredPct === null
+      ? ''
+      : ` Los Angeles County as a whole is ${number(city.countyUninsuredPct, 1)}% uninsured. That is the county mix, not a Burbank score.`
+  return `
+      <section class="panel">
+        <h2>What this number means</h2>
+        <p>Burbank is ${rate} uninsured. Among these ${cohort.length - 1} similar-size cities the median is ${peerRate}. Burbank's median household income is ${income}${peerIncome}. The comparison uses the same Census ACS 5-year definition in every city: residents of all ages with no health insurance.</p>
+        <p>${namedLines === '' ? '' : `${namedLines}. `}Income does not automatically produce coverage. A richer peer can have a higher uninsured rate. A poorer neighbor can too.</p>
+        <p>The City of Burbank did not buy this result. Employer plans, Medi-Cal, Medicare, and Covered California are what insure people. Studio and hospital jobs in Burbank are a plausible reason more residents have coverage. This table does not measure that. It also does not measure whether people can get an appointment, what they pay, or how good the care is.</p>
+        <p>What it does not infer: that Burbank is healthier, that city hall runs an insurance program, or that Providence Saint Joseph is a municipal hospital. Hospital counts and miles are a different question and are not in this table.${county}</p>
+      </section>`
 }
 
 function racePeerRow(city: City, current: boolean, dev: boolean): string {
@@ -522,8 +504,9 @@ export function methodologyPage(dataset: Dataset, dev: boolean): string {
       <ul>
         <li>California State Controller City Financial Transactions Reports, fiscal year ${s.scoFiscalYear}. Police uses <code>CURR_EXP_POLICE</code>. Parks uses <code>CURR_EXP_PARK_REC</code>. Utilities use electric, water, gas, sewer, and solid waste enterprise operating expenses (excluding depreciation), plus the matching governmental current-expenditure lines. Totals and population come from the Controller's per-capita file. Taxes use general and functional property-tax and sales-and-use-tax lines.</li>
         <li>Population growth compares the Controller estimate for ${s.scoFiscalYear} with ${s.scoPopulationPriorYear}.</li>
-        <li>Housing and race/ethnicity: ${s.acsVintage ?? 'Census ACS 5-year was unavailable when this snapshot was built'}. Race reports use table B03002 (Hispanic or Latino of any race, and non-Hispanic White, Black, and Asian). Other is the remaining non-Hispanic groups. Healthcare reports use B19013 (median household income), B27001 or S2701 (uninsured), and C24010 diagnosing and treating practitioners.</li>
-        <li>Hospitals and ERs: ${s.hospitalVintage ?? 'HCAI licensed facility listing was unavailable when this snapshot was built'}. Counts are open general acute care parent hospitals. Miles are from the Census city centroid to the nearest of those hospitals. CDC PLACES modeled adult uninsured rates are not used; ACS covers all ages.</li>
+        <li>Housing and race/ethnicity: ${s.acsVintage ?? 'Census ACS 5-year was unavailable when this snapshot was built'}. Race reports use table B03002 (Hispanic or Latino of any race, and non-Hispanic White, Black, and Asian). Other is the remaining non-Hispanic groups.</li>
+        <li>Uninsured reports use Census ACS 5-year uninsured share (B27001 or S2701, all ages) and median household income (B19013) on the same peer list as the spending posts. The figure is the share of residents with no health insurance. It is not a city-run insurance program. Employer plans, Medi-Cal, Medicare, and Covered California are outside the city budget. CDC PLACES modeled adult uninsured rates are not used.</li>
+        <li>Hospitals and ERs: ${s.hospitalVintage ?? 'HCAI licensed facility listing was unavailable when this snapshot was built'}. Counts are open general acute care parent hospitals. Miles are from the Census city centroid to the nearest of those hospitals. Those fields stay on city pages. They are not part of the uninsured comparison.</li>
         <li>Crime: CA DOJ OpenJustice Crimes and Clearances${s.crimeYear ? `, calendar year ${s.crimeYear}` : ', city-level file unavailable in this snapshot'}. Tables show violent and property rates separately. Those are FBI index crimes (homicide, rape, robbery, aggravated assault; burglary, theft, auto theft, and arson). Traffic stops, citations, and most misdemeanors are not included. Clearance rates are UCR clear-by-arrest or exceptional means. A clearance recorded in this year can be for a crime from an earlier year, so the rate can exceed 100%.</li>
         <li>Police staffing: CA DOJ OpenJustice Law Enforcement Personnel${s.personnelYear ? `, October 31, ${s.personnelYear}` : ', city-level file unavailable in this snapshot'}. Counts are funded non-jail sworn officers. Sheriff, CHP, campus, transit, and park agencies are not assigned to a city. This is a one-day snapshot, not average annual staffing, and it is not a calls-for-service or response-time file.</li>
       </ul>
@@ -531,12 +514,13 @@ export function methodologyPage(dataset: Dataset, dev: boolean): string {
       <p>Peers are California cities with at least 10,000 residents, excluding Vernon, Industry, and Irwindale. The first pass keeps cities between 0.5× and 2.0× the subject city's population. The 20 closest by log population are kept, with a small preference for the same region. If fewer than 20 remain, the band widens to 0.35–2.8×. For Burbank, Glendale and Pasadena replace Norwalk and Hesperia; Los Angeles, San Francisco, and San Diego replace Downey, Rialto, and Jurupa Valley; Chula Vista replaces San Buenaventura; and Simi Valley replaces South Gate.</p>
       <p>Police $ / crime is police spending per resident divided by crimes per resident. It is a comparison ratio, not a claim that higher spending should produce lower crime. Utility comparisons use the same peer list. Cities served by investor-owned utilities will show little or no electric spending.</p>
       <p>Demographics reports reuse that same peer list. Pearson r values are computed only inside that 21-city group. They measure association, not cause.</p>
-      <p>Healthcare reports reuse that same peer list and add a county table. City hospital counts miss a hospital just across a city line; the miles column and the county table are there for that. Practitioner counts are ACS occupations, not a physician license file.</p>
+      <p>Uninsured reports reuse that same peer list. They compare coverage and income, not city spending and not hospital supply. A lower uninsured rate is not a claim that city hall provided the insurance or that residents are healthier.</p>
       <h2>What we do not do</h2>
       <ul>
         <li>Contract or sheriff cities are flagged when police spending is zero or far below the peer median. They are not ranked on police spending, and county sheriff crime totals are not assigned to those cities.</li>
         <li>Enterprise utilities can make total spending look high. City pages also show governmental current spending.</li>
         <li>Finance years, ACS 5-year windows, and crime calendar years do not line up exactly. Every page shows the vintage that was used.</li>
+        <li>Uninsured comparisons are not a claim that the city provided health insurance.</li>
       </ul>
       <p class="note">Snapshot generated ${escapeHtml(s.generatedAt)}.</p>
     </article>`

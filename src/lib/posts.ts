@@ -161,15 +161,17 @@ export function buildHealthcarePost(city: City, peers: PeerSet, bySlug: Map<stri
   const rank = rankAscending(city.uninsuredPct, uninsuredValues)
   const pct = pctFromMedian(city.uninsuredPct, cohortMedian)
   const peerNames = peerCities.map((peer) => peer.name)
-  const miles =
-    city.milesToHospital === null ? 'an unpublished distance' : `${number(city.milesToHospital, 1)} miles`
-  const title = `${city.name} is ${number(city.uninsuredPct, 1)}% uninsured. Healthcare access next to the same ${peerCities.length} cities used for spending comparisons.`
-  const dek = `Nearest general acute care hospital is ${miles} from the city center. Rank is lowest uninsured share in this peer set, not a grade.`
+  const incomeValues = [city.medianIncome, ...peerCities.map((peer) => peer.medianIncome)].filter(
+    (value): value is number => value !== null,
+  )
+  const incomeMedian = median(incomeValues)
+  const title = `${city.name} is ${number(city.uninsuredPct, 1)}% uninsured. Among ${peerCities.length} similar California cities the median is ${number(cohortMedian, 1)}%.`
+  const dek = uninsuredDek(city, incomeMedian)
   const paragraphs = [
-    `${city.name} is ${number(city.uninsuredPct, 1)}% uninsured, with a median household income of ${city.medianIncome === null ? 'an unpublished amount' : money(city.medianIncome)}. Among the same ${peerCities.length} cities used for the spending posts (${listNames(peerNames)}), the uninsured median is ${number(cohortMedian, 1)}% (${signedPct(pct)}). Lower uninsured is ranked first.`,
-    healthcareSupplySentence(city),
-    healthcareCountySentence(city),
-    'Hospitals and ERs are open HCAI general acute care parent facilities. Practitioners are ACS diagnosing and treating occupations (doctors plus other licensed clinicians, not an MD registry). Miles are from the Census city centroid to the nearest hospital, not the average resident trip. CDC PLACES publishes a modeled adult uninsured rate; this page uses ACS 5-year so the figure covers all ages and matches the other Census tables. The peer list is the same population-band set used for spending.',
+    uninsuredLead(city, peerNames, cohortMedian, pct, incomeMedian),
+    'That figure is the Census ACS 5-year share of residents with no health insurance, all ages. It is the same definition in every city. It is not a city-run insurance plan, not a hospital rating, and not a grade for city hall.',
+    'Most coverage comes from employers, Medi-Cal, Medicare, and Covered California. A lower uninsured rate can mean more people have job-based insurance, qualify for public coverage, or buy a marketplace plan. It does not mean the city provided the insurance, that residents are healthier, or that care is cheaper or better.',
+    `Among these ${uninsuredValues.length} cities, ${city.name} ranks ${rank} for the lowest uninsured share. Rank is descriptive. The peer list is the same population-band set used for spending comparisons.`,
   ]
 
   return {
@@ -189,27 +191,28 @@ export function buildHealthcarePost(city: City, peers: PeerSet, bySlug: Map<stri
   }
 }
 
-function healthcareSupplySentence(city: City): string {
-  const hospitals = `${city.hospitalCount} hospital${city.hospitalCount === 1 ? '' : 's'} (${city.hospitalsPer100k === null ? '—' : number(city.hospitalsPer100k, 2)} per 100,000)`
-  const ers = `${city.erCount} emergency department${city.erCount === 1 ? '' : 's'} (${city.ersPer100k === null ? '—' : number(city.ersPer100k, 2)} per 100,000)`
-  const doctors =
-    city.practitionersPer100k === null
-      ? 'Healthcare practitioner counts are unpublished for this city.'
-      : `ACS healthcare practitioners are ${number(city.practitionersPer100k, 0)} per 100,000 residents.`
-  const miles =
-    city.milesToHospital === null
-      ? 'Distance to the nearest hospital is unpublished.'
-      : `The nearest hospital is ${number(city.milesToHospital, 1)} miles from the city center.`
-  return `${city.name} has ${hospitals} and ${ers}. ${doctors} ${miles}`
+function uninsuredDek(city: City, incomeMedian: number | null): string {
+  if (city.medianIncome === null || incomeMedian === null) {
+    return 'This is Census coverage, not a city insurance program. Rank is lowest uninsured share, not a grade.'
+  }
+  return `${city.name}'s median household income is ${money(city.medianIncome)}, ${signedPct(pctFromMedian(city.medianIncome, incomeMedian))} the peer income median of ${money(incomeMedian)}. This is Census coverage, not a city insurance program.`
 }
 
-function healthcareCountySentence(city: City): string {
-  const hospitals = `${city.countyHospitalCount} general acute care hospital${city.countyHospitalCount === 1 ? '' : 's'}`
-  const rate =
-    city.countyHospitalsPer100k === null ? '' : ` (${number(city.countyHospitalsPer100k, 2)} per 100,000)`
-  const uninsured =
-    city.countyUninsuredPct === null ? '' : ` County uninsured share is ${number(city.countyUninsuredPct, 1)}%.`
-  return `Hospital markets are county-scale. ${city.county} County has ${hospitals}${rate}.${uninsured}`
+function uninsuredLead(
+  city: City,
+  peerNames: string[],
+  uninsuredMedian: number,
+  uninsuredPctFromMed: number,
+  incomeMedian: number | null,
+): string {
+  const head = `${city.name} is ${number(city.uninsuredPct ?? 0, 1)}% uninsured. Among ${peerNames.length} similar California cities (${listNames(peerNames)}), the uninsured median is ${number(uninsuredMedian, 1)}% (${signedPct(uninsuredPctFromMed)}).`
+  if (city.medianIncome === null || incomeMedian === null) return head
+  const incomeGap = pctFromMedian(city.medianIncome, incomeMedian)
+  const income = ` Median household income is ${money(city.medianIncome)}, ${signedPct(incomeGap)} the peer income median of ${money(incomeMedian)}.`
+  if (incomeGap < -0.5) {
+    return `${head}${income} A lower uninsured rate here is not explained by higher income alone.`
+  }
+  return `${head}${income}`
 }
 
 function correlationSentence(city: City, peers: City[]): string {
