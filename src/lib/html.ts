@@ -353,6 +353,11 @@ function healthcarePostPage(post: Post, dataset: Dataset, dev: boolean): string 
       <p class="lede">${escapeHtml(post.dek)}</p>
       ${post.paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join('\n')}
       <section class="panel">
+        <h2>Why this is posted</h2>
+        <p>This site asks whether a city is getting what it pays for. Most spending tables cannot answer that. Uninsured share can be compared with one Census definition in every city, so it is one of the few resident outcomes here that means what it says.</p>
+        <p>The purpose of this page is to put that coverage fact next to income before anyone treats it as a city hall grade or as “they are just richer.” It is not an argument that ${escapeHtml(city.name)} provided the insurance, that residents are healthier, or that anything should be raised or cut.</p>
+      </section>
+      <section class="panel">
         <h2>Peer comparison</h2>
         <div class="table-wrap">
           <table class="data" data-sortable>
